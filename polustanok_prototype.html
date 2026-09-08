@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Полустанок — прототип</title>
+<style>
+html,body{margin:0;height:100%;background:#090b0b;color:#ddd;font-family:system-ui,Arial;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh;background:#111}
+#hud{position:fixed;left:18px;top:16px;max-width:360px;pointer-events:none;text-shadow:0 2px 5px #000}
+#title{font-size:22px;letter-spacing:2px}
+#hint{margin-top:8px;font-size:14px;line-height:1.4}
+#noise{margin-top:12px;width:220px;height:12px;border:1px solid #777;background:#111}
+#bar{height:100%;width:8%;background:#bbb;transition:width .1s}
+#radio{position:fixed;right:18px;bottom:18px;width:290px;padding:12px;background:#0c0d0ddd;border:1px solid #555;display:none}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="title">ПОЛУСТАНОК</div>
+  <div id="hint">05:00. Доставьте письмо к жёлтому фонарю.<br>WASD — движение · Shift — бег · E — радио</div>
+  <div id="noise"><div id="bar"></div></div>
+</div>
+<div id="radio">📻 <b>МАЯК</b><br><span id="radioText">...</span></div>
+<div id="fade"></div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),bar=document.getElementById('bar');
+const radio=document.getElementById('radio'),radioText=document.getElementById('radioText');
+function resize(){c.width=innerWidth;c.height=innerHeight} addEventListener('resize',resize);resize();
+
+const keys={}; addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(e.key.toLowerCase()==='e') toggleRadio()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+let p={x:120,y:470}, time=0, noise=0, danger=0, delivered=false;
+const dinos=[
+ {x:670,y:230,r:82,phase:0,type:'steg'},
+ {x:920,y:390,r:60,phase:1,type:'raptor'},
+ {x:420,y:170,r:46,phase:2,type:'raptor'}
+];
+const lamp={x:1080,y:125};
+
+function toggleRadio(){
+ radio.style.display=radio.style.display==='block'?'none':'block';
+ if(radio.style.display==='block'){
+   const msgs=[
+    '«Курьер, если слышишь меня — не беги. Они слышат вибрации.»',
+    '«В пять ноль семь миграция. Перекройте подъезды... хотя, ладно, уже поздно.»',
+    '«И не включай большой свет. Я серьёзно.»'
+   ];
+   radioText.textContent=msgs[Math.floor(time/8)%msgs.length];
+ }
+}
+
+function worldToScreen(x,y){return [x-p.x+c.width/2,y-p.y+c.height/2]}
+
+function draw(){
+ ctx.clearRect(0,0,c.width,c.height);
+ // night-blue dawn
+ ctx.fillStyle='#121718';ctx.fillRect(0,0,c.width,c.height);
+ // ground
+ ctx.fillStyle='#242725';ctx.fillRect(0,c.height*.42,c.width,c.height*.58);
+ // road
+ let [rx,ry]=worldToScreen(0,330);ctx.fillStyle='#151817';ctx.fillRect(0,ry,c.width,210);
+ ctx.strokeStyle='#4c4d48';ctx.lineWidth=3;ctx.setLineDash([28,28]);ctx.beginPath();ctx.moveTo(0,ry+105);ctx.lineTo(c.width,ry+105);ctx.stroke();ctx.setLineDash([]);
+ // buildings
+ const buildings=[[80,30,210,250],[360,70,190,210],[760,15,250,280],[1030,230,180,180]];
+ for(const b of buildings){let [x,y]=worldToScreen(b[0],b[1]);ctx.fillStyle='#5b5a52';ctx.fillRect(x,y,b[2],b[3]);ctx.fillStyle='#343735';
+   for(let yy=25;yy<b[3]-15;yy+=42)for(let xx=18;xx<b[2]-18;xx+=42){ctx.fillRect(x+xx,y+yy,18,22)}
+ }
+ // trees
+ for(let i=0;i<22;i++){let x=(i*137)%1250,y=70+(i*83)%390;let [sx,sy]=worldToScreen(x,y);
+  ctx.fillStyle='#26382e';ctx.beginPath();ctx.arc(sx,sy,24+(i%3)*8,0,7);ctx.fill();
+  ctx.fillStyle='#4b3828';ctx.fillRect(sx-4,sy+15,8,35)
+ }
+ // lamp
+ let [lx,ly]=worldToScreen(lamp.x,lamp.y);
+ ctx.strokeStyle='#555';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(lx,ly+65);ctx.lineTo(lx,ly);ctx.stroke();
+ ctx.fillStyle='#d9c46a';ctx.beginPath();ctx.arc(lx,ly,9,0,7);ctx.fill();
+ ctx.globalAlpha=.13;ctx.fillStyle='#f5dc7c';ctx.beginPath();ctx.arc(lx,ly,90,0,7);ctx.fill();ctx.globalAlpha=1;
+ // dinos
+ for(const d of dinos){let [sx,sy]=worldToScreen(d.x,d.y);let breathe=1+Math.sin(time*1.7+d.phase)*.025;
+   ctx.save();ctx.translate(sx,sy);ctx.scale(breathe,breathe);
+   if(d.type==='steg'){ctx.fillStyle='#3b5148';ctx.beginPath();ctx.ellipse(0,0,105,42,0,0,7);ctx.fill();
+    ctx.fillStyle='#34483f';ctx.beginPath();ctx.ellipse(92,-20,35,28,0,0,7);ctx.fill();
+    ctx.fillStyle='#806c49';for(let i=-65;i<70;i+=25){ctx.beginPath();ctx.moveTo(i,-33);ctx.lineTo(i+12,-70);ctx.lineTo(i+28,-35);ctx.fill()}
+   }else{ctx.fillStyle='#554a42';ctx.beginPath();ctx.ellipse(0,0,58,25,0,0,7);ctx.fill();
+    ctx.beginPath();ctx.ellipse(52,-8,22,17,0,0,7);ctx.fill();ctx.strokeStyle='#554a42';ctx.lineWidth=6;
+    for(let i=-30;i<40;i+=24){ctx.beginPath();ctx.moveTo(i,18);ctx.lineTo(i-4,45);ctx.stroke()}
+   }ctx.restore();
+ }
+ // player
+ ctx.fillStyle='#c7c0ae';ctx.beginPath();ctx.arc(c.width/2,c.height/2,9,0,7);ctx.fill();
+ // vignette
+ let g=ctx.createRadialGradient(c.width/2,c.height/2,100,c.width/2,c.height/2,Math.max(c.width,c.height)*.65);
+ g.addColorStop(0,'transparent');g.addColorStop(1,'rgba(0,0,0,.72)');ctx.fillStyle=g;ctx.fillRect(0,0,c.width,c.height);
+}
+
+function update(dt){
+ time+=dt;
+ let dx=(keys.d?1:0)-(keys.a?1:0),dy=(keys.s?1:0)-(keys.w?1:0);
+ let len=Math.hypot(dx,dy)||1, run=keys.shift, speed=run?145:78;
+ p.x+=dx/len*speed*dt;p.y+=dy/len*speed*dt;
+ p.x=Math.max(20,Math.min(1230,p.x));p.y=Math.max(20,Math.min(540,p.y));
+ let moving=dx||dy;
+ noise += ((moving?(run?62:22):0)-noise*5)*dt;
+ // breathing rhythm / proximity danger
+ danger=0;
+ for(const d of dinos){
+   const dist=Math.hypot(p.x-d.x,p.y-d.y);
+   if(dist<170) danger=Math.max(danger,(170-dist)/170);
+ }
+ bar.style.width=Math.min(100,noise+danger*45)+'%';
+ bar.style.background=danger>.55?'#eee':'#aaa';
+ if(danger>.75 && noise>35){
+   const fade=document.getElementById('fade');fade.style.opacity=.72;
+   setTimeout(()=>fade.style.opacity=0,120);
+   p.x-=dx/len*25;p.y-=dy/len*25;
+ }
+ if(!delivered && Math.hypot(p.x-lamp.x,p.y-lamp.y)<55){
+   delivered=true;
+   radio.style.display='block';
+   radioText.textContent='«Ты пришёл. Но письмо... письмо не мне. Не сейчас. Не включай свет.»';
+   document.getElementById('hint').innerHTML='<b>Письмо доставлено.</b><br>Нажмите E, чтобы услышать Смотрителя.';
+ }
+}
+let last=performance.now();
+function loop(now){let dt=Math.min(.033,(now-last)/1000);last=now;update(dt);draw();requestAnimationFrame(loop)}
+loop(last);
+</script>
+</body></html>
